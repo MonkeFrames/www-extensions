@@ -43,6 +43,8 @@
     .filter { border: 1px solid var(--line); background: transparent; color: #d2d6da; padding: 7px 13px; cursor: pointer; }
     .filter:hover, .filter.active { border-color: var(--accent); color: var(--accent); background: #20313a; }
     .search { width: min(310px, 100%); position: relative; }
+    .sort { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .sort select { border: 1px solid #555c64; padding: 8px 10px; background: #202327; color: var(--text); }
     .search span { position: absolute; left: 12px; top: 8px; color: var(--muted); font-size: 16px; }
     .search input { width: 100%; background: #202327; border: 1px solid #555c64; color: var(--text); padding: 9px 12px 9px 37px; outline: none; }
     .search input:focus { border-color: var(--accent); }
@@ -102,6 +104,12 @@
     .carousel-count { color: var(--muted); font-size: 11px; text-align: right; }
     .detail-label { margin: 15px 0 4px; color: #929ba3; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
     .detail-value { color: #e8ebee; font-size: 12px; }
+    .rating { display: flex; align-items: center; gap: 8px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--line); }
+    .rating form { margin: 0; }
+    .rating button { border: 1px solid var(--line); padding: 6px 10px; background: #25292d; color: #d5dbe0; cursor: pointer; }
+    .rating button:hover, .rating button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: #20313a; }
+    .rating-count { color: var(--muted); font-size: 12px; }
+    .rating-signin { margin-left: auto; color: var(--accent); font-size: 12px; }
     .detail-list { margin: 4px 0 0; padding-left: 17px; color: #c1c7cd; font-size: 12px; }
     .primary { width: 100%; display: block; margin-top: 19px; border: 0; padding: 10px 14px; background: var(--accent); color: #10232b; font-weight: 600; text-align: center; cursor: pointer; }
     .primary:hover { background: #8bdcff; }
@@ -119,7 +127,7 @@
   {% if not selected.item and catalog %}{% set selected.item = catalog[0] %}{% endif %}
   <div class="app">
     <main class="main" id="extensions">
-      <header class="topbar"><div class="crumb"><img src="{{ url_for('static', filename='img/icon.png') }}" height=32 alt="Logo"><span>MonkeFrames&nbsp; / &nbsp;<b>Extensions</b></span></div><div class="profile">
+      <header class="topbar"><div class="crumb"><img src="{{ url_for('static', filename='img/icon.png') }}" height=32 alt="Logo"><span>MonkeFrames&nbsp; / &nbsp;<b>Extensions</b></span><a class="upload-link" href="{{ url_for('documentation') }}">Docs</a></div><div class="profile">
         {% if session.get('discord_user') %}
           <a class="upload-link" href="{{ url_for('upload') }}">Upload</a>
           {% if is_admin %}<a class="admin-link" href="{{ url_for('admin_panel') }}">Admin</a>{% endif %}
@@ -140,16 +148,20 @@
         <div class="toolbar">
           <div class="filters" role="group" aria-label="Filter extensions by category">
             <button class="filter active" type="button" data-category="all">All</button>
-            {% set categories = catalog|map(attribute='category')|unique|list %}
+            {% set categories = ['Sharing', 'Camera', 'Replay / Motion', 'Misc'] %}
             {% for category in categories %}<button class="filter" type="button" data-category="{{ category|lower }}">{{ category }}</button>{% endfor %}
           </div>
-          <label class="search"><span aria-hidden="true">⌕</span><input id="extension-search" type="search" placeholder="Search extensions" aria-label="Search extensions"></label>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
+            <label class="sort" for="extension-sort">Sort by<select id="extension-sort"><option value="default">Name</option><option value="likes">Most liked</option><option value="publisher">Publisher</option></select></label>
+            <label class="sort" for="verification-filter">Developer<select id="verification-filter"><option value="all">All</option><option value="verified">Verified</option><option value="unverified">Non-verified</option></select></label>
+            <label class="search"><span aria-hidden="true">⌕</span><input id="extension-search" type="search" placeholder="Search extensions" aria-label="Search extensions"></label>
+          </div>
         </div>
         <div class="section-head"><h2>Available extensions</h2><span class="count" id="result-count">{{ catalog|length }} extensions</span></div>
         <div class="layout">
           <section class="grid" id="extension-grid" aria-label="Available extensions">
             {% for extension in catalog %}
-              <a class="card{% if selected.item and selected.item.id == extension.id %} selected{% endif %}" href="?extension={{ extension.id|urlencode }}" data-category="{{ extension.category|lower }}" data-search="{{ (extension.name ~ ' ' ~ extension.summary ~ ' ' ~ extension.description|default('') ~ ' ' ~ extension.author_name|default('') ~ ' ' ~ extension.category)|lower }}"{% if selected.item and selected.item.id == extension.id %} aria-current="true"{% endif %}>
+              <a class="card{% if selected.item and selected.item.id == extension.id %} selected{% endif %}" href="?extension={{ extension.id|urlencode }}" data-category="{{ extension.category|lower }}" data-verified="{{ 'true' if extension.is_verified_developer else 'false' }}" data-likes="{{ extension.likes }}" data-publisher="{{ extension.author_name|lower }}" data-search="{{ (extension.name ~ ' ' ~ extension.summary ~ ' ' ~ extension.description|default('') ~ ' ' ~ extension.author_name|default('') ~ ' ' ~ extension.category)|lower }}"{% if selected.item and selected.item.id == extension.id %} aria-current="true"{% endif %}>
                 {% if extension.icon and (extension.icon.startswith('/media/') or extension.icon.startswith('/static/')) %}<span class="extension-icon"><img src="{{ extension.icon }}" alt=""></span>{% else %}<span class="extension-icon" aria-hidden="true">{{ extension.icon|default('✦') }}</span>{% endif %}
                 <span class="card-body"><span class="card-title"><h3>{{ extension.name }}{% if extension.is_verified_developer %}<span class="verified-badge" title="Verified Extension Developer" aria-label="Verified Extension Developer"><img src="{{ url_for('static', filename='img/verified.svg') }}" alt=""> Verified</span>{% endif %}</h3><span class="version">v{{ extension.version }}</span></span><p>{{ extension.summary }}</p><span class="card-meta"><span class="tag">{{ extension.category }}</span><span class="status">●&nbsp; Available</span></span></span>
               </a>
@@ -183,6 +195,15 @@
               <div class="detail-label">Last updated</div><div class="detail-value">{{ selected.item.updated|default('Recently') }}</div>
               <div class="detail-label">Requirements</div>
               {% if selected.item.requirements %}<ul class="detail-list">{% for requirement in selected.item.requirements %}<li>{{ requirement }}</li>{% endfor %}</ul>{% else %}<div class="detail-value">No additional requirements</div>{% endif %}
+              <div class="rating" aria-label="Extension rating">
+                {% if session.get('discord_user') %}
+                  <form method="post" action="{{ url_for('vote_extension', extension_id=selected.item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="vote" value="1"><button type="submit" aria-label="Thumbs up" aria-pressed="{{ 'true' if selected.item.user_vote == 1 else 'false' }}">👍 {{ selected.item.likes }}</button></form>
+                  <form method="post" action="{{ url_for('vote_extension', extension_id=selected.item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="vote" value="-1"><button type="submit" aria-label="Thumbs down" aria-pressed="{{ 'true' if selected.item.user_vote == -1 else 'false' }}">👎 {{ selected.item.dislikes }}</button></form>
+                {% else %}
+                  <span class="rating-count">👍 {{ selected.item.likes }} &nbsp; 👎 {{ selected.item.dislikes }}</span>
+                  <a class="rating-signin" href="{{ url_for('discord_auth.login') }}">Sign in to rate</a>
+                {% endif %}
+              </div>
               {% if selected.item.download %}<a class="primary" href="{{ selected.item.download }}">Download</a>{% else %}<span class="primary disabled" aria-disabled="true">Download unavailable</span>{% endif %}
             </div>
           </aside>
@@ -233,14 +254,34 @@
       const buttons = [...document.querySelectorAll('.filter')];
       const search = document.querySelector('#extension-search');
       if (!search) return;
+      const sort = document.querySelector('#extension-sort');
+      const verificationFilter = document.querySelector('#verification-filter');
+      const grid = document.querySelector('#extension-grid');
+      const sortCards = () => {
+        const mode = sort?.value || 'default';
+        cards.sort((a, b) => {
+          if (mode === 'likes') {
+            const difference = Number(b.dataset.likes) - Number(a.dataset.likes);
+            if (difference) return difference;
+          } else if (mode === 'publisher') {
+            const difference = a.dataset.publisher.localeCompare(b.dataset.publisher);
+            if (difference) return difference;
+          }
+          return a.querySelector('h3').textContent.localeCompare(b.querySelector('h3').textContent);
+        });
+        cards.forEach(card => grid.insertBefore(card, document.querySelector('#no-results')));
+      };
       const empty = document.querySelector('#no-results');
       const count = document.querySelector('#result-count');
       let category = 'all';
       function update() {
         const term = search.value.trim().toLowerCase();
+        const verified = verificationFilter?.value || 'all';
         let visible = 0;
         cards.forEach(card => {
-          const matches = (category === 'all' || card.dataset.category === category) && card.dataset.search.includes(term);
+          const matchesCategory = category === 'all' || card.dataset.category === category;
+          const matchesVerification = verified === 'all' || card.dataset.verified === (verified === 'verified' ? 'true' : 'false');
+          const matches = matchesCategory && matchesVerification && card.dataset.search.includes(term);
           card.hidden = !matches;
           if (matches) visible++;
         });
@@ -252,6 +293,8 @@
         buttons.forEach(item => item.classList.toggle('active', item === button));
         update();
       }));
+      sort?.addEventListener('change', sortCards);
+      verificationFilter?.addEventListener('change', update);
       search.addEventListener('input', update);
     })();
   </script>

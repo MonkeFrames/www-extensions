@@ -35,6 +35,7 @@ load_dotenv()
 
 ROOT = Path(__file__).resolve().parent
 ROOT_ADMIN_ID = "514514780061696001"
+EXTENSION_CATEGORIES = ("Sharing", "Camera", "Replay / Motion", "Misc")
 app = Flask(__name__, instance_relative_config=True)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 database_path = Path(os.environ.get("DATABASE_PATH", Path(app.instance_path) / "extensions.sqlite3"))
@@ -101,6 +102,20 @@ def _ensure_admin_schema(db: sqlite3.Connection) -> None:
     db.execute(
         "INSERT OR IGNORE INTO admins (user_id, added_by) VALUES (?, ?)",
         (ROOT_ADMIN_ID, ROOT_ADMIN_ID),
+    )
+
+
+def _ensure_feedback_schema(db: sqlite3.Connection) -> None:
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS extension_votes (
+            extension_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            vote INTEGER NOT NULL CHECK (vote IN (-1, 1)),
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (extension_id, user_id)
+        )
+        """
     )
 
 
@@ -195,6 +210,22 @@ def _render_markdown(source: str) -> str:
     )
 
 
+def _documentation_pages() -> list[dict[str, str]]:
+    docs_path = ROOT / "docs"
+    pages = []
+    for path in sorted(docs_path.rglob("*.md"), key=lambda item: item.relative_to(docs_path).as_posix().lower()):
+        if not path.is_file():
+            continue
+        slug = path.relative_to(docs_path).with_suffix("").as_posix()
+        source = path.read_text(encoding="utf-8")
+        title = next(
+            (line.lstrip("# ").strip() for line in source.splitlines() if line.startswith("# ") and line.lstrip("# ").strip()),
+            path.stem.replace("-", " ").replace("_", " ").title(),
+        )
+        pages.append({"slug": slug, "title": title, "html": _render_markdown(source)})
+    return pages
+
+
 def _image_bytes(file_storage, max_dimension: int) -> bytes:
     extension = Path(file_storage.filename or "").suffix.lower()
     formats = {".jpg": "JPEG", ".jpeg": "JPEG", ".png": "PNG", ".webp": "WEBP"}
@@ -256,11 +287,75 @@ def browse():
     with _db_connect() as db:
         extensions = load_extensions(db, status="approved")
         _ensure_admin_schema(db)
+        _ensure_feedback_schema(db)
         verified_ids = {row[0] for row in db.execute("SELECT user_id FROM verified_developers")}
+        vote_rows = db.execute(
+            "SELECT extension_id, vote, COUNT(*) FROM extension_votes GROUP BY extension_id, vote"
+        ).fetchall()
+        counts = {extension.id: {1: 0, -1: 0} for extension in extensions}
+        for extension_id, vote, count in vote_rows:
+            if extension_id in counts:
+                counts[extension_id][vote] = count
+        user_id = str((session.get("discord_user") or {}).get("id", ""))
+        user_votes = {}
+        if user_id:
+            user_votes = dict(db.execute(
+                "SELECT extension_id, vote FROM extension_votes WHERE user_id = ?",
+                (user_id,),
+            ).fetchall())
     for extension in extensions:
+        if extension.category not in EXTENSION_CATEGORIES:
+            extension.category = "Misc"
         extension.description_html = _render_markdown(extension.description)
         extension.is_verified_developer = extension.author_id in verified_ids
-    return render_template("browse.html", extensions=extensions)
+        extension.likes = counts[extension.id][1]
+        extension.dislikes = counts[extension.id][-1]
+        extension.user_vote = user_votes.get(extension.id)
+    csrf_token = session.setdefault("vote_csrf_token", secrets.token_urlsafe(32))
+    return render_template("browse.html", extensions=extensions, csrf_token=csrf_token)
+
+
+@app.route("/docs/")
+@app.route("/docs/<path:slug>")
+def documentation(slug: str = ""):
+    pages = _documentation_pages()
+    selected = next((page for page in pages if page["slug"] == slug), None) if slug else None
+    if slug and selected is None:
+        abort(404)
+    return render_template("docs.html", pages=pages, selected=selected)
+
+
+@app.post("/extensions/<extension_id>/vote")
+def vote_extension(extension_id: str):
+    user = session.get("discord_user")
+    if not user:
+        abort(401, description="Sign in with Discord to rate extensions.")
+    expected_token = session.get("vote_csrf_token", "")
+    submitted_token = request.form.get("csrf_token", "")
+    if not expected_token or not hmac.compare_digest(expected_token, submitted_token):
+        abort(400, description="Vote form expired. Reload the page and try again.")
+    try:
+        vote = int(request.form.get("vote", ""))
+    except ValueError:
+        abort(400, description="Choose thumbs up or thumbs down.")
+    if vote not in (-1, 1):
+        abort(400, description="Choose thumbs up or thumbs down.")
+    with _db_connect() as db:
+        if not db.execute(
+            "SELECT 1 FROM extensions WHERE id = ? AND status = 'approved'", (extension_id,)
+        ).fetchone():
+            abort(404)
+        _ensure_feedback_schema(db)
+        db.execute(
+            """
+            INSERT INTO extension_votes (extension_id, user_id, vote)
+            VALUES (?, ?, ?)
+            ON CONFLICT(extension_id, user_id) DO UPDATE SET
+                vote = excluded.vote, updated_at = CURRENT_TIMESTAMP
+            """,
+            (extension_id, str(user.get("id", "")), vote),
+        )
+    return redirect(url_for("browse", extension=extension_id), code=303)
 
 
 def _api_extension_data(extension: Extension, verified_ids: set[str], *, full: bool = False) -> dict:
@@ -344,6 +439,7 @@ def upload():
         return render_template(
             "upload.html", discord_user=discord_user, csrf_token=csrf_token, banned=False,
             owned_extensions=owned_extensions, selected_extension=selected_extension,
+            extension_categories=EXTENSION_CATEGORIES,
         )
 
     submitted_token = request.form.get("csrf_token", "")
@@ -358,6 +454,7 @@ def upload():
     edit_query = {"edit": selected_id} if selected_id else {}
     name = request.form.get("name", "").strip()
     summary = request.form.get("summary", "").strip()
+    category = request.form.get("category", "").strip()
     description = request.form.get("description", "").strip()
     version = request.form.get("version", "").strip()
     changelog = request.form.get("changelog", "").strip() if selected_extension else ""
@@ -372,6 +469,9 @@ def upload():
         return redirect(url_for("upload", **edit_query))
     if not summary or len(summary) > 300:
         flash("Enter a short summary of 1–300 characters.", "error")
+        return redirect(url_for("upload", **edit_query))
+    if category not in EXTENSION_CATEGORIES:
+        flash("Choose one of the available extension categories.", "error")
         return redirect(url_for("upload", **edit_query))
     if not description or len(description) > 20000:
         flash("Enter a description of 1–20,000 characters.", "error")
@@ -434,7 +534,7 @@ def upload():
             id=extension_id,
             name=name,
             version=version,
-            category=selected_extension.category if selected_extension else "Extensions",
+            category=category,
             summary=summary,
             description=description,
             author_name=discord_user.get("username", ""),

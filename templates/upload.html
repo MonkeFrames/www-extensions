@@ -89,6 +89,12 @@
           <p class="hint">Up to 300 characters.</p>
         </div>
         <div class="field">
+          <label for="category">Category</label>
+          <select id="category" name="category" required>
+            {% for category in extension_categories %}<option value="{{ category }}" {% if selected_extension and selected_extension.category == category %}selected{% elif selected_extension and selected_extension.category not in extension_categories and category == 'Misc' %}selected{% elif not selected_extension and loop.first %}selected{% endif %}>{{ category }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
           <label for="version">Version</label>
           <input id="version" name="version" type="text" maxlength="32" required placeholder="e.g. 1.2.0" value="{{ selected_extension.version if selected_extension else '' }}">
         </div>
