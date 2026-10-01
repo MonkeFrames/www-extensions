@@ -16,6 +16,7 @@ from flask import (
     Flask,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -256,6 +257,59 @@ def browse():
         extension.description_html = _render_markdown(extension.description)
         extension.is_verified_developer = extension.author_id in verified_ids
     return render_template("browse.html", extensions=extensions)
+
+
+def _api_extension_data(extension: Extension, verified_ids: set[str], *, full: bool = False) -> dict:
+    def absolute_url(value: str) -> str:
+        if value.startswith("/"):
+            return request.host_url.rstrip("/") + value
+        return value
+
+    data = {
+        "id": extension.id,
+        "name": extension.name,
+        "version": extension.version,
+        "publisher": extension.author_name,
+        "publisher_id": extension.author_id,
+        "verified": extension.author_id in verified_ids,
+        "icon": absolute_url(extension.icon),
+        "summary": extension.summary,
+        "category": extension.category,
+        "updated": extension.updated,
+    }
+    if full:
+        data.update({
+            "description": extension.description,
+            "changelog": extension.changelog,
+            "download": absolute_url(extension.download),
+            "screenshots": [absolute_url(image) for image in extension.screenshots],
+            "requirements": extension.requirements,
+        })
+    return data
+
+
+@app.get("/api/gallery")
+def api_gallery():
+    with _db_connect() as db:
+        extensions = load_extensions(db, status="approved")
+        _ensure_admin_schema(db)
+        verified_ids = {row[0] for row in db.execute("SELECT user_id FROM verified_developers")}
+    return jsonify({"extensions": [_api_extension_data(extension, verified_ids) for extension in extensions]})
+
+
+@app.get("/api/extension")
+def api_extension():
+    extension_id = request.args.get("id", "").strip()
+    if not extension_id:
+        return jsonify({"error": "Missing required query parameter: id"}), 400
+    with _db_connect() as db:
+        extensions = load_extensions(db, status="approved")
+        extension = next((item for item in extensions if item.id == extension_id), None)
+        if extension is None:
+            return jsonify({"error": "Approved extension not found"}), 404
+        _ensure_admin_schema(db)
+        verified_ids = {row[0] for row in db.execute("SELECT user_id FROM verified_developers")}
+    return jsonify(_api_extension_data(extension, verified_ids, full=True))
 
 
 @app.route("/upload", methods=["GET", "POST"])
