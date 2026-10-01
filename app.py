@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 import bleach
 import markdown
 from dotenv import load_dotenv
@@ -41,6 +43,8 @@ if not database_path.is_absolute():
 upload_path = Path(app.instance_path) / "extension_uploads"
 upload_path.mkdir(parents=True, exist_ok=True)
 database_path.parent.mkdir(parents=True, exist_ok=True)
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 app.config.update(
     DATABASE=str(database_path),
