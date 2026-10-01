@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MonkeFrames Extensions</title>
+  <link rel="icon" href="/assets/img/icon.png"/>
+  <style>
+    :root {
+      color-scheme: dark;
+      --canvas: #17191c;
+      --surface: #202327;
+      --surface-raised: #282c31;
+      --line: #3a3f45;
+      --muted: #aeb5bc;
+      --text: #f4f6f8;
+      --accent: #60cdff;
+      --accent-dark: #0078a8;
+      --green: #6ccb91;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--canvas); color: var(--text); font: 14px/1.45 "Segoe UI", Arial, sans-serif; }
+    button, input { font: inherit; }
+    a { color: inherit; text-decoration: none; }
+    .app { min-height: 100vh; }
+    .main { min-width: 0; }
+    .topbar { height: 64px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 34px; background: #1c1f22; }
+    .crumb { display: flex; align-items: center; gap: 11px; color: var(--muted); }
+    .crumb-icon { width: 30px; height: 30px; object-fit: contain; }
+    .crumb b { color: var(--text); font-weight: 500; }
+    .profile { display: flex; align-items: center; gap: 10px; color: #d7dade; }
+    .avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #4c6878; font-size: 12px; object-fit: cover; }
+    .sign-in { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px; background: #5865f2; color: white; font-weight: 600; }
+    .sign-in:hover { background: #6975f5; }
+    .sign-out { color: var(--muted); font-size: 12px; }
+    .sign-out:hover { color: var(--text); }
+    .content { max-width: 1500px; margin: auto; padding: 34px; }
+    .eyebrow { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 7px 0 5px; font-size: 30px; font-weight: 600; letter-spacing: -.025em; }
+    .intro { margin: 0; max-width: 680px; color: var(--muted); }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 28px 0 18px; }
+    .filters { display: flex; gap: 7px; flex-wrap: wrap; }
+    .filter { border: 1px solid var(--line); background: transparent; color: #d2d6da; padding: 7px 13px; cursor: pointer; }
+    .filter:hover, .filter.active { border-color: var(--accent); color: var(--accent); background: #20313a; }
+    .search { width: min(310px, 100%); position: relative; }
+    .search span { position: absolute; left: 12px; top: 8px; color: var(--muted); font-size: 16px; }
+    .search input { width: 100%; background: #202327; border: 1px solid #555c64; color: var(--text); padding: 9px 12px 9px 37px; outline: none; }
+    .search input:focus { border-color: var(--accent); }
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 20px 0 12px; }
+    .section-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+    .count { color: var(--muted); font-size: 12px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .card { min-height: 159px; display: flex; gap: 14px; padding: 17px; border: 1px solid var(--line); background: var(--surface); transition: border-color .15s, background .15s; }
+    .card[hidden] { display: none; }
+    .card:hover, .card.selected { border-color: var(--accent); background: #242a2e; }
+    .extension-icon { flex: 0 0 42px; width: 42px; height: 42px; display: grid; place-items: center; background: #303940; color: var(--accent); font-size: 18px; font-weight: 600; }
+    .extension-icon img { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .card-body { min-width: 0; flex: 1; }
+    .card-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .card h3 { margin: 0; font-size: 15px; font-weight: 600; }
+    .version { color: #aeb5bc; font-size: 11px; white-space: nowrap; }
+    .card p { margin: 8px 0 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .card-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .tag { color: #cad0d5; font-size: 11px; }
+    .status { color: var(--green); font-size: 11px; }
+    .details { position: sticky; top: 18px; border: 1px solid var(--line); background: var(--surface); }
+    .details-head { padding: 18px; border-bottom: 1px solid var(--line); }
+    .details-title { display: flex; gap: 12px; align-items: center; }
+    .details h2 { margin: 0; font-size: 17px; font-weight: 600; }
+    .details-sub { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .details-content { padding: 18px; }
+    .details-content p { margin: 0 0 18px; color: #c1c7cd; font-size: 13px; }
+    .markdown-body { overflow-wrap: anywhere; }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 { margin: 17px 0 8px; font-size: 16px; }
+    .markdown-body ul, .markdown-body ol { padding-left: 20px; color: #c1c7cd; }
+    .markdown-body blockquote { margin: 12px 0; padding: 2px 12px; border-left: 2px solid var(--accent); color: var(--muted); }
+    .markdown-body pre { overflow-x: auto; padding: 12px; background: #17191c; }
+    .markdown-body code { padding: 1px 4px; background: #17191c; }
+    .markdown-body pre code { padding: 0; }
+    .markdown-body table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+    .markdown-body th, .markdown-body td { padding: 6px 9px; border: 1px solid var(--line); }
+    .upload-link { padding: 8px 12px; border: 1px solid var(--line); color: var(--text); }
+    .upload-link:hover { border-color: var(--accent); color: var(--accent); }
+    .admin-link { padding: 8px 12px; border: 1px solid #7d63ad; color: #d9c7ff; }
+    .admin-link:hover { border-color: #b69aeb; background: #30283b; }
+    .verified-badge { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; color: #65d150; font-size: 10px; font-weight: 700; white-space: nowrap; vertical-align: middle; }
+    .verified-badge img { width: 14px; height: 14px; object-fit: contain; vertical-align: middle; }
+    .flash { margin: 0 0 16px; padding: 11px 13px; border: 1px solid #3d7352; color: var(--green); background: #202a24; }
+    .screenshot-carousel { margin: 0 0 18px; min-width: 0; }
+    .carousel-stage { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 10; max-height: 340px; min-height: 140px; overflow: hidden; background: #151719; border: 1px solid var(--line); }
+    .carousel-slide { display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; }
+    .carousel-slide[hidden] { display: none; }
+    .carousel-arrow { position: absolute; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 34px; height: 42px; border: 1px solid #68717a; background: rgb(20 23 26 / 85%); color: white; font-size: 22px; cursor: pointer; }
+    .carousel-arrow:hover, .carousel-arrow:focus-visible { background: #313b42; border-color: var(--accent); outline: none; }
+    .carousel-prev { left: 8px; }
+    .carousel-next { right: 8px; }
+    .carousel-rail { display: flex; gap: 7px; margin-top: 8px; padding: 2px 1px 6px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-color: #59616a transparent; }
+    .carousel-thumb { flex: 0 0 60px; width: 60px; height: 42px; padding: 0; overflow: hidden; border: 1px solid var(--line); background: #151719; cursor: pointer; }
+    .carousel-thumb[aria-current="true"] { border: 2px solid var(--accent); }
+    .carousel-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .carousel-count { color: var(--muted); font-size: 11px; text-align: right; }
+    .detail-label { margin: 15px 0 4px; color: #929ba3; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .detail-value { color: #e8ebee; font-size: 12px; }
+    .detail-list { margin: 4px 0 0; padding-left: 17px; color: #c1c7cd; font-size: 12px; }
+    .primary { width: 100%; display: block; margin-top: 19px; border: 0; padding: 10px 14px; background: var(--accent); color: #10232b; font-weight: 600; text-align: center; cursor: pointer; }
+    .primary:hover { background: #8bdcff; }
+    .primary.disabled { background: #41474d; color: #aeb5bc; cursor: not-allowed; }
+    .empty { display: none; grid-column: 1 / -1; padding: 28px; border: 1px dashed var(--line); color: var(--muted); text-align: center; }
+    @media (max-width: 1050px) { .layout { grid-template-columns: minmax(0, 1fr) 280px; } .grid { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) { .topbar { padding: 0 18px; } .content { padding: 25px 18px; } .toolbar { align-items: stretch; flex-direction: column-reverse; } .search { width: 100%; } .layout { grid-template-columns: 1fr; } .details { position: static; } }
+  </style>
+</head>
+<body>
+  {% set catalog = extensions|default([], true) %}
+  {% set selected_id = request.args.get('extension') %}
+  {% set selected = namespace(item=none) %}
+  {% for extension in catalog %}{% if extension.id|string == selected_id|string %}{% set selected.item = extension %}{% endif %}{% endfor %}
+  {% if not selected.item and catalog %}{% set selected.item = catalog[0] %}{% endif %}
+  <div class="app">
+    <main class="main" id="extensions">
+      <header class="topbar"><div class="crumb"><img src="{{ url_for('static', filename='img/icon.png') }}" height=32 alt="Logo"><span>MonkeFrames&nbsp; / &nbsp;<b>Extensions</b></span></div><div class="profile">
+        {% if session.get('discord_user') %}
+          <a class="upload-link" href="{{ url_for('upload') }}">Upload</a>
+          {% if is_admin %}<a class="admin-link" href="{{ url_for('admin_panel') }}">Admin</a>{% endif %}
+          <img class="avatar" src="{{ session['discord_user']['avatar_url'] }}" alt="">
+          <span>{{ session['discord_user']['username'] }}</span>
+          {% if is_verified_developer %}<span class="verified-badge" title="Verified Extension Developer" aria-label="Verified Extension Developer"><img src="{{ url_for('static', filename='img/verified.svg') }}" alt=""> Verified</span>{% endif %}
+          <a class="sign-out" href="{{ url_for('discord_auth.logout') }}">Sign out</a>
+        {% else %}
+          <a class="sign-in" href="{{ url_for('discord_auth.login') }}">Sign in</a>
+        {% endif %}
+      </div></header>
+      {% if catalog %}
+      <div class="content">
+        {% for category, message in get_flashed_messages(with_categories=true) %}<div class="flash" role="status">{{ message }}</div>{% endfor %}
+        <div class="eyebrow">Library</div>
+        <h1>Extensions</h1>
+        <p class="intro">Discover and manage extensions for your game. Select an extension to see its details and requirements.</p>
+        <div class="toolbar">
+          <div class="filters" role="group" aria-label="Filter extensions by category">
+            <button class="filter active" type="button" data-category="all">All</button>
+            {% set categories = catalog|map(attribute='category')|unique|list %}
+            {% for category in categories %}<button class="filter" type="button" data-category="{{ category|lower }}">{{ category }}</button>{% endfor %}
+          </div>
+          <label class="search"><span aria-hidden="true">⌕</span><input id="extension-search" type="search" placeholder="Search extensions" aria-label="Search extensions"></label>
+        </div>
+        <div class="section-head"><h2>Available extensions</h2><span class="count" id="result-count">{{ catalog|length }} extensions</span></div>
+        <div class="layout">
+          <section class="grid" id="extension-grid" aria-label="Available extensions">
+            {% for extension in catalog %}
+              <a class="card{% if selected.item and selected.item.id == extension.id %} selected{% endif %}" href="?extension={{ extension.id|urlencode }}" data-category="{{ extension.category|lower }}" data-search="{{ (extension.name ~ ' ' ~ extension.summary ~ ' ' ~ extension.description|default('') ~ ' ' ~ extension.author_name|default('') ~ ' ' ~ extension.category)|lower }}"{% if selected.item and selected.item.id == extension.id %} aria-current="true"{% endif %}>
+                {% if extension.icon and (extension.icon.startswith('/media/') or extension.icon.startswith('/static/')) %}<span class="extension-icon"><img src="{{ extension.icon }}" alt=""></span>{% else %}<span class="extension-icon" aria-hidden="true">{{ extension.icon|default('✦') }}</span>{% endif %}
+                <span class="card-body"><span class="card-title"><h3>{{ extension.name }}{% if extension.is_verified_developer %}<span class="verified-badge" title="Verified Extension Developer" aria-label="Verified Extension Developer"><img src="{{ url_for('static', filename='img/verified.svg') }}" alt=""> Verified</span>{% endif %}</h3><span class="version">v{{ extension.version }}</span></span><p>{{ extension.summary }}</p><span class="card-meta"><span class="tag">{{ extension.category }}</span><span class="status">●&nbsp; Available</span></span></span>
+              </a>
+            {% else %}<div class="empty" style="display:block">No extensions are available yet.</div>{% endfor %}
+            <div class="empty" id="no-results">No extensions match your search.</div>
+          </section>
+          {% if selected.item %}
+          <aside class="details" aria-label="Selected extension details">
+            <div class="details-head"><div class="details-title">{% if selected.item.icon and (selected.item.icon.startswith('/media/') or selected.item.icon.startswith('/static/')) %}<span class="extension-icon"><img src="{{ selected.item.icon }}" alt=""></span>{% else %}<span class="extension-icon" aria-hidden="true">{{ selected.item.icon|default('✦') }}</span>{% endif %}<div><h2>{{ selected.item.name }}</h2><div class="details-sub">Version {{ selected.item.version }} · {{ selected.item.category }}</div></div></div></div>
+            <div class="details-content">
+              {% set screenshots = selected.item.screenshots|default([], true) %}
+              {% if screenshots %}
+              <div class="screenshot-carousel" data-carousel aria-label="{{ selected.item.name }} screenshots" tabindex="0">
+                <div class="carousel-stage">
+                  {% for screenshot in screenshots %}<img class="carousel-slide" src="{{ screenshot }}" alt="{{ selected.item.name }} screenshot {{ loop.index }}" {% if not loop.first %}hidden{% endif %} {% if loop.first %}fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async">{% endfor %}
+                  {% if screenshots|length > 1 %}
+                  <button class="carousel-arrow carousel-prev" type="button" data-direction="-1" aria-label="Previous screenshot">‹</button>
+                  <button class="carousel-arrow carousel-next" type="button" data-direction="1" aria-label="Next screenshot">›</button>
+                  {% endif %}
+                </div>
+                {% if screenshots|length > 1 %}
+                <div class="carousel-rail" aria-label="Choose a screenshot">
+                  {% for screenshot in screenshots %}<button class="carousel-thumb" type="button" data-slide="{{ loop.index0 }}" aria-label="Show screenshot {{ loop.index }}"{% if loop.first %} aria-current="true"{% endif %}><img src="{{ screenshot }}" alt="" loading="lazy" decoding="async"></button>{% endfor %}
+                </div>
+                <div class="carousel-count" aria-live="polite">1 / {{ screenshots|length }}</div>
+                {% endif %}
+              </div>
+              {% endif %}
+              <div class="markdown-body">{% if selected.item.description_html is defined %}{{ selected.item.description_html|safe }}{% else %}<p>{{ selected.item.description|default(selected.item.summary) }}</p>{% endif %}</div>
+              <div class="detail-label">Publisher</div><div class="detail-value">{{ selected.item.author_name|default('Community creator') }}{% if selected.item.is_verified_developer %}<span class="verified-badge" title="Verified Extension Developer" aria-label="Verified Extension Developer"><img src="{{ url_for('static', filename='img/verified.svg') }}" alt=""> Verified</span>{% endif %}</div>
+              <div class="detail-label">Last updated</div><div class="detail-value">{{ selected.item.updated|default('Recently') }}</div>
+              <div class="detail-label">Requirements</div>
+              {% if selected.item.requirements %}<ul class="detail-list">{% for requirement in selected.item.requirements %}<li>{{ requirement }}</li>{% endfor %}</ul>{% else %}<div class="detail-value">No additional requirements</div>{% endif %}
+              {% if selected.item.download %}<a class="primary" href="{{ selected.item.download }}">Download</a>{% else %}<span class="primary disabled" aria-disabled="true">Download unavailable</span>{% endif %}
+            </div>
+          </aside>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="content"><p class="intro">Failed to get extensions</p></div>
+      {% endif %}
+    </main>
+  </div>
+  <script>
+    (() => {
+      document.querySelectorAll('[data-carousel]').forEach(carousel => {
+        const slides = [...carousel.querySelectorAll('.carousel-slide')];
+        const thumbs = [...carousel.querySelectorAll('.carousel-thumb')];
+        const count = carousel.querySelector('.carousel-count');
+        let active = 0;
+        const show = index => {
+          active = (index + slides.length) % slides.length;
+          slides.forEach((slide, i) => { slide.hidden = i !== active; });
+          thumbs.forEach((thumb, i) => {
+            if (i === active) thumb.setAttribute('aria-current', 'true');
+            else thumb.removeAttribute('aria-current');
+          });
+          if (count) count.textContent = `${active + 1} / ${slides.length}`;
+          thumbs[active]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        };
+        carousel.querySelectorAll('[data-direction]').forEach(button => button.addEventListener('click', () => {
+          show(active + Number(button.dataset.direction));
+        }));
+        thumbs.forEach(thumb => thumb.addEventListener('click', () => show(Number(thumb.dataset.slide))));
+        carousel.addEventListener('keydown', event => {
+          if (event.key === 'ArrowLeft') { event.preventDefault(); show(active - 1); }
+          if (event.key === 'ArrowRight') { event.preventDefault(); show(active + 1); }
+        });
+      });
+      const cards = [...document.querySelectorAll('.card')];
+      const scrollKey = 'monkeframes-extension-scroll';
+      const savedScroll = sessionStorage.getItem(scrollKey);
+      if (savedScroll !== null) {
+        sessionStorage.removeItem(scrollKey);
+        requestAnimationFrame(() => window.scrollTo(0, Number(savedScroll)));
+      }
+      cards.forEach(card => card.addEventListener('click', () => {
+        sessionStorage.setItem(scrollKey, String(window.scrollY));
+      }));
+      const buttons = [...document.querySelectorAll('.filter')];
+      const search = document.querySelector('#extension-search');
+      if (!search) return;
+      const empty = document.querySelector('#no-results');
+      const count = document.querySelector('#result-count');
+      let category = 'all';
+      function update() {
+        const term = search.value.trim().toLowerCase();
+        let visible = 0;
+        cards.forEach(card => {
+          const matches = (category === 'all' || card.dataset.category === category) && card.dataset.search.includes(term);
+          card.hidden = !matches;
+          if (matches) visible++;
+        });
+        empty.style.display = visible ? 'none' : 'block';
+        count.textContent = `${visible} ${visible === 1 ? 'extension' : 'extensions'}`;
+      }
+      buttons.forEach(button => button.addEventListener('click', () => {
+        category = button.dataset.category;
+        buttons.forEach(item => item.classList.toggle('active', item === button));
+        update();
+      }));
+      search.addEventListener('input', update);
+    })();
+  </script>
+</body>
+</html>

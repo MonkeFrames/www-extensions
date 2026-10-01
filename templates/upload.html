@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Upload extension | MonkeFrames</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/icon.png') }}">
+  <style>
+    :root { color-scheme: dark; --canvas:#17191c; --surface:#202327; --line:#3a3f45; --muted:#aeb5bc; --text:#f4f6f8; --accent:#60cdff; --danger:#ff8d8d; --success:#6ccb91; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--canvas); color:var(--text); font:14px/1.5 "Segoe UI",Arial,sans-serif; }
+    a { color:inherit; text-decoration:none; }
+    .topbar { height:64px; padding:0 34px; display:flex; justify-content:space-between; align-items:center; background:#1c1f22; border-bottom:1px solid var(--line); }
+    .brand { display:flex; align-items:center; gap:11px; color:#c4cbd1; }
+    .brand img { width:30px; height:30px; object-fit:contain; }
+    .brand strong { color:var(--text); font-weight:500; }
+    .account { display:flex; align-items:center; gap:10px; color:#d7dade; }
+    .account img { width:30px; height:30px; border-radius:50%; object-fit:cover; }
+    .content { width:min(880px,100%); margin:0 auto; padding:36px 26px 60px; }
+    .eyebrow { color:var(--accent); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+    h1 { margin:7px 0 5px; font-size:30px; font-weight:600; letter-spacing:-.025em; }
+    .intro { margin:0; color:var(--muted); }
+    .form-card,.signin-card { margin-top:26px; padding:24px; border:1px solid var(--line); background:var(--surface); }
+    .field { margin-bottom:22px; }
+    label,.field-label { display:block; margin-bottom:6px; font-size:13px; font-weight:600; }
+    .hint { margin:4px 0 0; color:var(--muted); font-size:12px; }
+    input[type=text], textarea, select { width:100%; border:1px solid #555c64; border-radius:0; padding:10px 12px; background:#181a1d; color:var(--text); outline:none; }
+    input[type=text]:focus, textarea:focus, select:focus { border-color:var(--accent); }
+    textarea { min-height:250px; resize:vertical; font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .markdown-tools { display:flex; gap:5px; flex-wrap:wrap; padding:7px; border:1px solid #555c64; border-bottom:0; background:#25292d; }
+    .markdown-tools button { border:1px solid var(--line); padding:5px 9px; background:#202327; color:#d9dee2; cursor:pointer; font-size:12px; }
+    .markdown-tools button:hover { color:var(--accent); border-color:var(--accent); }
+    .file-input { display:block; width:100%; padding:10px; border:1px dashed #555c64; background:#181a1d; color:#d9dee2; }
+    .file-input::file-selector-button { margin-right:12px; padding:7px 10px; border:1px solid var(--line); background:#30353a; color:var(--text); cursor:pointer; }
+    .flash { margin:16px 0 0; padding:11px 13px; border:1px solid var(--line); background:#25292d; }
+    .flash.error { color:var(--danger); border-color:#704343; }
+    .flash.success { color:var(--success); border-color:#3d7352; }
+    .actions { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:27px; }
+    .submit { border:0; padding:11px 20px; background:var(--accent); color:#10232b; font-weight:700; cursor:pointer; }
+    .submit:hover { background:#8bdcff; }
+    .submit:disabled { opacity:.65; cursor:wait; }
+    .back { color:var(--muted); }
+    .back:hover { color:var(--text); }
+    .signin-card { color:var(--muted); }
+    .signin { display:inline-block; margin-top:15px; padding:10px 15px; background:#5865f2; color:white; font-weight:600; }
+    .admin-link { margin-right:12px; color:#d9c7ff; }
+    .verified-badge { display:inline-flex; align-items:center; gap:3px; margin-left:6px; color:#65d150; font-size:10px; font-weight:700; white-space:nowrap; vertical-align:middle; }
+    .verified-badge img { width:14px; height:14px; object-fit:contain; }
+    @media(max-width:600px) { .topbar { padding:0 16px; } .content { padding:26px 16px 44px; } .form-card,.signin-card { padding:17px; } .actions { align-items:flex-start; flex-direction:column-reverse; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('browse') }}"><img src="{{ url_for('static', filename='img/icon.png') }}" alt=""><span>MonkeFrames&nbsp; / &nbsp;<strong>Upload extension</strong></span></a>
+    {% if discord_user %}<div class="account">{% if is_admin %}<a class="admin-link" href="{{ url_for('admin_panel') }}">Admin</a>{% endif %}<img src="{{ discord_user.avatar_url }}" alt=""><span>{{ discord_user.username }}</span>{% if is_verified_developer %}<span class="verified-badge" title="Verified Extension Developer" aria-label="Verified Extension Developer"><img src="{{ url_for('static', filename='img/verified.svg') }}" alt=""> Verified</span>{% endif %}</div>{% endif %}
+  </header>
+  <main class="content">
+    <div class="eyebrow">Creator tools</div>
+    <h1>{{ 'Update an extension' if selected_extension else 'Upload an extension' }}</h1>
+    <p class="intro">Share your mod with the MonkeFrames community. Submissions are reviewed before they appear in the gallery.</p>
+    {% for category, message in get_flashed_messages(with_categories=true) %}<div class="flash {{ category }}" role="status">{{ message }}</div>{% endfor %}
+
+    {% if banned %}
+      <section class="signin-card"><strong>This Discord account is banned from uploading extensions.</strong></section>
+    {% elif not discord_user %}
+      <section class="signin-card"><strong>Sign in with Discord to submit an extension.</strong><br>Your Discord account will be listed as the publisher.<br><a class="signin" href="{{ url_for('discord_auth.login', next='/upload') }}">Sign in with Discord</a></section>
+    {% else %}
+      {% if owned_extensions %}
+      <form class="form-card" method="get" style="padding:16px 20px">
+        <div class="field" style="margin:0">
+          <label for="edit">Select an existing mod to update</label>
+          <select id="edit" name="edit" onchange="this.form.submit()">
+            <option value="">Create a new extension</option>
+            {% for extension in owned_extensions %}<option value="{{ extension.id }}" {% if selected_extension and selected_extension.id == extension.id %}selected{% endif %}>{{ extension.name }} · v{{ extension.version }}{% if extension.status != 'approved' %} · {{ extension.status|replace('_', ' ')|title }}{% endif %}</option>{% endfor %}
+          </select>
+        </div>
+      </form>
+      {% endif %}
+      <form class="form-card" method="post" enctype="multipart/form-data" id="upload-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="extension_id" value="{{ selected_extension.id if selected_extension else '' }}">
+        <div class="field">
+          <label for="name">Mod name</label>
+          <input id="name" name="name" type="text" maxlength="100" required autocomplete="off" placeholder="Give your mod a name" value="{{ selected_extension.name if selected_extension else '' }}">
+        </div>
+        <div class="field">
+          <label for="summary">Short summary</label>
+          <input id="summary" name="summary" type="text" maxlength="300" required placeholder="A concise description for the gallery card" value="{{ selected_extension.summary if selected_extension else '' }}">
+          <p class="hint">Up to 300 characters.</p>
+        </div>
+        <div class="field">
+          <label for="version">Version</label>
+          <input id="version" name="version" type="text" maxlength="32" required placeholder="e.g. 1.2.0" value="{{ selected_extension.version if selected_extension else '' }}">
+        </div>
+        {% if selected_extension %}
+        <div class="field">
+          <label for="changelog">Changelog</label>
+          <textarea id="changelog" name="changelog" maxlength="5000" required placeholder="Describe what changed in this version...">{{ selected_extension.changelog }}</textarea>
+          <p class="hint">Tell reviewers and users what changed in this update. Up to 5,000 characters.</p>
+        </div>
+        {% endif %}
+        <div class="field">
+          <label for="description">Full description</label>
+          <div class="markdown-tools" role="toolbar" aria-label="Markdown formatting">
+            <button type="button" data-before="**" data-after="**" aria-label="Bold">Bold</button>
+            <button type="button" data-before="*" data-after="*" aria-label="Italic">Italic</button>
+            <button type="button" data-before="## " data-after="" aria-label="Heading">Heading</button>
+            <button type="button" data-before="- " data-after="" aria-label="List">List</button>
+            <button type="button" data-before="[" data-after="](https://)" aria-label="Link">Link</button>
+            <button type="button" data-before="```\n" data-after="\n```" aria-label="Code block">Code</button>
+          </div>
+          <textarea id="description" name="description" maxlength="20000" required placeholder="Describe what your mod does, how to use it, and any important notes...\n\nMarkdown is supported: headings, links, lists, tables, quotes, and code blocks.">{{ selected_extension.description if selected_extension else '' }}</textarea>
+          <p class="hint">Markdown is rendered in the extension inspector. Up to 20,000 characters.</p>
+        </div>
+        <div class="field">
+          <label for="icon">Browser icon <span class="hint" style="display:inline">(optional)</span></label>
+          <input class="file-input" id="icon" name="icon" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+          <p class="hint">{{ 'If omitted, the current icon is kept.' if selected_extension else 'If omitted, the MonkeFrames site icon is used.' }} Images must be 50 × 50 pixels or larger and no larger than 1024 × 1024; maximum file size is 5 MB.</p>
+        </div>
+        <div class="field">
+          <label for="screenshots">Screenshots</label>
+          <input class="file-input" id="screenshots" name="screenshots" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple>
+          <p class="hint" id="screenshot-hint">{{ 'Leave empty to keep the current screenshots.' if selected_extension else 'Optional.' }} Upload up to 5 JPG, JPEG, PNG, or WEBP images. Each must be at least 50 × 50 pixels, at most 4096 × 4096, and no larger than 5 MB.</p>
+        </div>
+        <div class="field">
+          <label for="extension-file">Extension package</label>
+          <input class="file-input" id="extension-file" name="extension_file" type="file" accept=".mfextension" required>
+          <p class="hint">{{ 'Choose the updated .mfextension package.' if selected_extension else 'Choose a .mfextension package.' }} Maximum file size is 100 MB.</p>
+        </div>
+        <div class="actions">
+          <a class="back" href="{{ url_for('browse') }}">Back to extensions</a>
+          <button class="submit" id="submit-button" type="submit">{{ 'Submit update for review' if selected_extension else 'Submit for review' }}</button>
+        </div>
+      </form>
+    {% endif %}
+  </main>
+  <script>
+    (() => {
+      const form = document.querySelector('#upload-form');
+      if (!form) return;
+      const editor = document.querySelector('#description');
+      document.querySelectorAll('.markdown-tools button').forEach(button => button.addEventListener('click', () => {
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        const selected = editor.value.slice(start, end) || 'text';
+        const before = button.dataset.before.replaceAll('\\n', '\n');
+        const after = button.dataset.after.replaceAll('\\n', '\n');
+        editor.setRangeText(before + selected + after, start, end, 'select');
+        editor.focus();
+      }));
+
+      const screenshotInput = document.querySelector('#screenshots');
+      screenshotInput.addEventListener('change', () => {
+        const files = [...screenshotInput.files];
+        const hint = document.querySelector('#screenshot-hint');
+        if (files.length > 5) {
+          hint.textContent = 'Choose no more than 5 screenshots.';
+          hint.style.color = 'var(--danger)';
+          screenshotInput.value = '';
+          return;
+        }
+        hint.textContent = files.length ? `${files.length} screenshot${files.length === 1 ? '' : 's'} selected. Image dimensions and file types will be checked on upload.` : 'Optional. Upload up to 5 JPG, JPEG, PNG, or WEBP images. Each must be at least 50 × 50 pixels, at most 4096 × 4096, and no larger than 5 MB.';
+        hint.style.color = '';
+      });
+
+      form.addEventListener('submit', () => {
+        const button = document.querySelector('#submit-button');
+        button.disabled = true;
+        button.textContent = 'Uploading…';
+      });
+    })();
+  </script>
+</body>
+</html>
